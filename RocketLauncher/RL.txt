@@ -1,0 +1,101 @@
+extends Node3D
+class_name RocketLauncher
+
+@export var damage: float = 200.0
+@export var headshot_multiplier: float = 10.0
+@export var projectile_scene: PackedScene
+
+@onready var animation: AnimationPlayer = $AnimationPlayer
+@onready var audio: AudioStreamPlayer = $AudioStreamPlayer
+@onready var hitcast: RayCast3D = $RayCast3D
+
+var is_shooting: bool = false
+var active: bool = true
+
+func _ready() -> void:
+	add_to_group("weapons")
+	hide()
+	animation.animation_finished.connect(_on_animation_finished)
+
+# --- Weapon Pickup / Equip ---
+func on_pickup() -> void:
+	active = true
+	show()
+
+func equip() -> void:
+	if not active:
+		return
+	show()
+	if animation.has_animation("Raise"):
+		animation.play("Raise")
+
+func on_unequip() -> void:
+	is_shooting = false
+	hide()
+
+func reload() -> void:
+	if Input.is_action_just_pressed("reload"):
+		animation.play("Reload full")
+
+# --- Shooting ---
+func shoot() -> void:
+	if not visible or is_shooting:
+		return
+	is_shooting = true
+	animation.play("Shoot")  # muzzle flash triggers _fire_bullet
+
+func _on_animation_finished(anim_name: StringName) -> void:
+	if anim_name == "Shoot":
+		is_shooting = false
+
+# --- Firing Logic ---
+func _fire_bullet() -> void:
+	audio.play()
+
+	if not projectile_scene:
+		return
+
+	var projectile = projectile_scene.instantiate()
+	get_tree().current_scene.add_child(projectile)
+
+	# Copy RayCast transform (muzzle position + rotation)
+	projectile.global_transform = hitcast.global_transform
+
+		# Assign owner for damage callback
+	projectile.owner_gun = self
+
+# --- Damage helper (called by bullet) ---
+func apply_bullet_hit(hit: Node) -> void:
+	if not hit:
+		return
+
+	var final_damage = damage
+	if hit.name.to_lower() == "head":
+		final_damage *= headshot_multiplier
+		print("💥 Headshot! Damage =", final_damage)
+
+	var attack = Attack.new(final_damage, self)
+
+	# Check for HealthComponent on hit or parent
+	var health: Node = null
+	var node = hit
+	while node and health == null:
+		health = node.get_node_or_null("EnemyHeath")
+		node = node.get_parent()
+
+	if health:
+		health.damage(attack)
+
+
+# --- Weapon Switch Anim Helpers ---
+func play_lower() -> void:
+	is_shooting = false
+	if animation.has_animation("Lower"):
+		animation.play("Lower")
+
+func play_raise() -> void:
+	show()
+	if animation.has_animation("Raise"):
+		animation.play("Raise")
+	else:
+		animation.play("Idle")

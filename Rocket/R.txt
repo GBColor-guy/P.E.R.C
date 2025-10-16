@@ -1,0 +1,26 @@
+extends Node3D
+
+const SPEED = 100.0
+var life_timer: float = 0.0
+var owner_gun: Node = null   # will be set by the pistol
+
+@onready var particles: GPUParticles3D = $GPUParticles3D
+@onready var hitcast: RayCast3D = $RayCast3D
+
+func _ready() -> void:
+	particles.emitting = true
+
+func _process(delta: float) -> void:
+
+	# check collision
+	hitcast.force_raycast_update()
+	if hitcast.is_colliding() and owner_gun != null:
+		owner_gun.apply_bullet_hit(hitcast.get_collider())
+		queue_free()
+
+	life_timer += delta
+	if life_timer > 5.0:
+		queue_free()
+
+func _physics_process(delta: float) -> void:
+	translate(Vector3(0, 0, -SPEED) * delta)
